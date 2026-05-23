@@ -489,6 +489,10 @@ export default function App() {
         errorMsg = 'Password harus minimal 6 karakter.';
       } else if (err.code === 'auth/invalid-email') {
         errorMsg = 'Format email tidak valid.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        errorMsg = 'Provider Email/Password belum diaktifkan di Firebase Console Anda. Harap aktifkan di Firebase Console > Authentication > Sign-in method.';
+      } else {
+        errorMsg = `Error (${err.code || 'unknown'}): ${err.message || 'Silakan periksa konfigurasi Firebase Anda.'}`;
       }
       setAuthError(errorMsg);
     } finally {
@@ -504,8 +508,14 @@ export default function App() {
       triggerToast('Berhasil masuk via Google!', 'success');
     } catch (err: any) {
       console.error(err);
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setAuthError('Gagal masuk via Google. Coba lagi.');
+      if (err.code === 'auth/popup-closed-by-user') {
+        setAuthError('Popup ditutup sebelum proses login selesai.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setAuthError('Provider Google belum diaktifkan di Firebase Console Anda. Harap aktifkan di Firebase Console > Authentication > Sign-in method.');
+      } else if (err.code === 'auth/popup-blocked') {
+        setAuthError('Popup diblokir oleh browser. Harap buka aplikasi di Tab Baru (menggunakan tombol di kanan atas preview).');
+      } else {
+        setAuthError(`Gagal masuk via Google (${err.code || 'unknown'}): ${err.message || 'Coba lagi.'}`);
       }
     }
   };
