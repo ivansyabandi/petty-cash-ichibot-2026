@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Log transaksi kas masuk atau kas keluar pada Petty Cash",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID Unik Transaksi"
+        },
+        "jenis": {
+          "type": "string",
+          "enum": [
+            "pengeluaran",
+            "penambahan"
+          ],
+          "description": "Tipe transaksi"
+        },
+        "nama": {
+          "type": "string",
+          "description": "Deskripsi atau nama pengeluaran/penambahan"
+        },
+        "nominal": {
+          "type": "number",
+          "description": "Nominal mata uang awal transaksi"
+        },
+        "nominalFinal": {
+          "type": "number",
+          "description": "Nominal akhir setelah dikurangi kembalian"
+        },
+        "tanggal": {
+          "type": "string",
+          "description": "Tanggal terjadinya transaksi (YYYY-MM-DD)"
+        },
+        "treasurer": {
+          "type": "string",
+          "description": "Nama Penanggung Jawab / Bendahara yang mengurus transaksi"
+        },
+        "sumber": {
+          "type": "string",
+          "description": "Sumber dana asal (hanya untuk penambahan saldo)"
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "Status kunci jika kembalian sudah diinput"
+        },
+        "kembalian": {
+          "type": "number",
+          "description": "Nominal kembalian"
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID pengguna pemilik data transaksi dari Firebase Auth"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu dokumen dibuat di server"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu dokumen terakhir diperbarui di server"
+        }
+      },
+      "required": [
+        "id",
+        "jenis",
+        "nama",
+        "nominal",
+        "nominalFinal",
+        "tanggal",
+        "treasurer",
+        "locked",
+        "kembalian",
+        "userId",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Koleksi utama transaksi petty cash yang diisolasi per pengguna"
+    }
+  }
+}

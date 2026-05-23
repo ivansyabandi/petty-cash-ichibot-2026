@@ -1,0 +1,6 @@
+{
+  "name": "Manajemen Petty Cash",
+  "description": "Aplikasi manajemen kas kecil (petty cash) organisasi dengan pencatatan transaksi masuk dan keluar serta pengelolaan kembalian.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

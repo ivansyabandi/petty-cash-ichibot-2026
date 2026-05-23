@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Global Safety Net - Menolak semua akses tidak terdefinisi secara bawaan
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE SECURITY PRIMITIVES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- ENTITY-SPECIFIC VALIDATION BLUEPRINT ---
+    function isValidTransaction(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.jenis is string && (data.jenis == 'pengeluaran' || data.jenis == 'penambahan')
+        && data.nama is string && data.nama.size() > 0 && data.nama.size() <= 200
+        && data.nominal is number && data.nominal > 0 && data.nominal <= 1000000000
+        && data.nominalFinal is number && data.nominalFinal >= 0 && data.nominalFinal <= 1000000000
+        && data.tanggal is string && data.tanggal.size() == 10
+        && data.treasurer is string && data.treasurer.size() > 0 && data.treasurer.size() <= 150
+        && data.locked is bool
+        && data.kembalian is number && data.kembalian >= 0
+        && data.userId is string && data.userId == request.auth.uid
+        && (
+          // Skenario 1: Penambahan Saldo (Top-up)
+          (data.jenis == 'penambahan' 
+            && data.keys().hasAll(['id', 'jenis', 'nama', 'nominal', 'nominalFinal', 'tanggal', 'treasurer', 'locked', 'kembalian', 'userId', 'createdAt', 'updatedAt', 'sumber'])
+            && data.keys().size() == 13
+            && data.sumber is string && data.sumber.size() <= 200
+            && data.kembalian == 0
+            && data.nominalFinal == data.nominal
+          ) || 
+          // Skenario 2: Pengeluaran Kas
+          (data.jenis == 'pengeluaran'
+            && data.keys().hasAll(['id', 'jenis', 'nama', 'nominal', 'nominalFinal', 'tanggal', 'treasurer', 'locked', 'kembalian', 'userId', 'createdAt', 'updatedAt'])
+            && data.keys().size() == 12
+            && data.nominalFinal == data.nominal - data.kembalian
+            && data.kembalian <= data.nominal
+          )
+        );
+    }
+
+    // --- SECURE FIRESTORE MATCH BLOCKS ---
+    match /transactions/{transactionId} {
+      
+      // Validasi ID path untuk mencegah poisoning/rekayasa karakter
+      allow get, delete: if isSignedIn() && isValidId(transactionId);
+      
+      // Query Enforcer: Mencegah Blanket List Reads dan pencurian query data user lain
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      // Batasi operasi detail GET hanya untuk sang pemilik
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // Pencatatan Transaksi Baru (Create)
+      allow create: if isVerifiedUser() 
+        && isValidId(transactionId)
+        && isValidTransaction(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      // Pembaharuan Transaksi (Update)
+      allow update: if isVerifiedUser()
+        && isValidId(transactionId)
+        // Pastikan dokumen milik pengguna yang sama
+        && resource.data.userId == request.auth.uid
+        // Batasi perubahan hanya jika dokumen belum terkunci (Terminal State Lock)
+        && resource.data.locked == false
+        // Validasi struktur dokumen masukan yang baru
+        && isValidTransaction(request.resource.data)
+        // Validasi Imutabilitas Fundamental
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.jenis == resource.data.jenis
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && (
+          // Aksi 1: Menyelesaikan Kembalian (Lock transaksi secara otomatis)
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kembalian', 'nominalFinal', 'locked', 'updatedAt'])) ||
+          // Aksi 2: Memperbaiki kesalahan entri kas sebelum dikunci
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nama', 'nominal', 'nominalFinal', 'tanggal', 'treasurer', 'updatedAt']))
+        );
+
+      // Penghapusan Transaksi (Delete)
+      allow delete: if isVerifiedUser()
+        && resource.data.userId == request.auth.uid
+        // Transaksi yang sudah terlanjur dikunci kembaliannya, dilarang dihapus demi audit log kas abadi
+        && resource.data.locked == false;
+    }
+  }
+}
